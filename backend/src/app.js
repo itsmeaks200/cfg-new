@@ -1,5 +1,7 @@
 const express = require('express');
 
+const eventRoutes = require('./routes/event.routes');
+const registrationRoutes = require('./routes/registration.routes');
 const authRoutes = require('./routes/auth.routes');
 const coordinatorRoutes = require('./routes/coordinator.routes');
 const { notFoundHandler, errorHandler } = require('./middleware/error.middleware');
@@ -12,9 +14,6 @@ function createApp() {
   app.get('/api/health', (req, res) => {
     res.status(200).json({ status: 'ok' });
   });
-
-  app.use('/api/auth', authRoutes);
-  app.use('/api/coordinators', coordinatorRoutes);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
