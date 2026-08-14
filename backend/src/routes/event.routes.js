@@ -2,24 +2,25 @@ const { Router } = require('express');
 
 const eventController = require('../controllers/event.controller');
 const registrationController = require('../controllers/registration.controller');
-const { stubAuthenticate, stubRequireRole } = require('../middleware/devStubAuth.middleware');
+const authenticate = require('../middleware/auth.middleware');
+const requireRole = require('../middleware/role.middleware');
 
 const router = Router();
 
 router.get('/', eventController.list);
 router.get('/:id', eventController.getOne);
 
-router.post('/', stubAuthenticate, stubRequireRole('ADMIN'), eventController.create);
-router.patch('/:id', stubAuthenticate, stubRequireRole('ADMIN', 'COORDINATOR'), eventController.update);
-router.patch('/:id/coordinator', stubAuthenticate, stubRequireRole('ADMIN'), eventController.assignCoordinator);
+router.post('/', authenticate, requireRole('ADMIN'), eventController.create);
+router.patch('/:id', authenticate, requireRole('ADMIN', 'COORDINATOR'), eventController.update);
+router.patch('/:id/coordinator', authenticate, requireRole('ADMIN'), eventController.assignCoordinator);
 
-router.post('/:id/open-registration', stubAuthenticate, stubRequireRole('ADMIN', 'COORDINATOR'), eventController.openRegistration);
-router.post('/:id/close-registration', stubAuthenticate, stubRequireRole('ADMIN', 'COORDINATOR'), eventController.closeRegistration);
+router.post('/:id/open-registration', authenticate, requireRole('ADMIN', 'COORDINATOR'), eventController.openRegistration);
+router.post('/:id/close-registration', authenticate, requireRole('ADMIN', 'COORDINATOR'), eventController.closeRegistration);
 
-router.get('/:id/registrations', stubAuthenticate, stubRequireRole('ADMIN', 'COORDINATOR'), eventController.listRegistrations);
-router.get('/:id/analytics', stubAuthenticate, stubRequireRole('ADMIN', 'COORDINATOR'), eventController.analytics);
+router.get('/:id/registrations', authenticate, requireRole('ADMIN', 'COORDINATOR'), eventController.listRegistrations);
+router.get('/:id/analytics', authenticate, requireRole('ADMIN', 'COORDINATOR'), eventController.analytics);
 
-router.post('/:id/register', stubAuthenticate, stubRequireRole('VOLUNTEER'), registrationController.registerForEvent);
-router.delete('/:id/register', stubAuthenticate, stubRequireRole('VOLUNTEER'), registrationController.unregisterFromEvent);
+router.post('/:id/register', authenticate, requireRole('VOLUNTEER'), registrationController.registerForEvent);
+router.delete('/:id/register', authenticate, requireRole('VOLUNTEER'), registrationController.unregisterFromEvent);
 
 module.exports = router;

@@ -15,6 +15,11 @@ function createApp() {
     res.status(200).json({ status: 'ok' });
   });
 
+  app.use('/api/auth', authRoutes);
+  app.use('/api/coordinators', coordinatorRoutes);
+  app.use('/api/events', eventRoutes);
+  app.use('/api', registrationRoutes);
+
   app.use(notFoundHandler);
   app.use(errorHandler);
 
