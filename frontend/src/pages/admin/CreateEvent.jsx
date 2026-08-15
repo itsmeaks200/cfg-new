@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { eventApi } from '../../api/endpoints';
+import { eventApi, coordinatorApi } from '../../api/endpoints';
 import { getErrorMessage } from '../../api/errorMessage';
 
 const initialForm = {
@@ -10,13 +10,19 @@ const initialForm = {
   start_time: '',
   end_time: '',
   required_volunteers: 1,
+  coordinator_id: '',
 };
 
 export default function CreateEvent() {
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
+  const [coordinators, setCoordinators] = useState([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    coordinatorApi.list().then(({ data }) => setCoordinators(data)).catch(() => {});
+  }, []);
 
   function update(field) {
     return (e) => setForm({ ...form, [field]: e.target.value });
@@ -32,6 +38,7 @@ export default function CreateEvent() {
         required_volunteers: Number(form.required_volunteers),
         start_time: new Date(form.start_time).toISOString(),
         end_time: new Date(form.end_time).toISOString(),
+        coordinator_id: form.coordinator_id ? Number(form.coordinator_id) : undefined,
       });
       navigate(`/events/${data.id}`);
     } catch (err) {
@@ -68,6 +75,15 @@ export default function CreateEvent() {
         <div className="form-group">
           <label>Required volunteers</label>
           <input type="number" min={1} value={form.required_volunteers} onChange={update('required_volunteers')} required />
+        </div>
+        <div className="form-group">
+          <label>Coordinator (optional)</label>
+          <select value={form.coordinator_id} onChange={update('coordinator_id')}>
+            <option value="">Assign later...</option>
+            {coordinators.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.email})</option>
+            ))}
+          </select>
         </div>
         {error && <p className="error-text">{error}</p>}
         <button type="submit" disabled={loading}>{loading ? 'Creating...' : 'Create event'}</button>

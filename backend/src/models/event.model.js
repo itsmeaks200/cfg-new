@@ -1,11 +1,11 @@
 const pool = require('../config/db');
 
-async function create({ title, description, location, startTime, endTime, requiredVolunteers, createdBy }) {
+async function create({ title, description, location, startTime, endTime, requiredVolunteers, createdBy, coordinatorId }) {
   const { rows } = await pool.query(
-    `INSERT INTO events (title, description, location, start_time, end_time, required_volunteers, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO events (title, description, location, start_time, end_time, required_volunteers, created_by, coordinator_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING *`,
-    [title, description, location, startTime, endTime, requiredVolunteers, createdBy]
+    [title, description, location, startTime, endTime, requiredVolunteers, createdBy, coordinatorId || null]
   );
   return rows[0];
 }

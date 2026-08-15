@@ -4,7 +4,7 @@ const userModel = require('../models/user.model');
 
 async function create(req, res, next) {
   try {
-    const { title, description, location, start_time, end_time, required_volunteers } = req.body;
+    const { title, description, location, start_time, end_time, required_volunteers, coordinator_id } = req.body;
     const event = await eventService.createEvent(
       {
         title,
@@ -13,10 +13,12 @@ async function create(req, res, next) {
         startTime: start_time,
         endTime: end_time,
         requiredVolunteers: required_volunteers,
+        coordinatorId: coordinator_id,
       },
-      req.user.id
+      req.user.id,
+      userModel
     );
-    res.status(201).json({ id: event.id, title: event.title, status: event.status });
+    res.status(201).json({ id: event.id, title: event.title, status: event.status, coordinator_id: event.coordinator_id });
   } catch (err) {
     next(err);
   }

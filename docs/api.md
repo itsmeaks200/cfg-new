@@ -291,9 +291,12 @@ Returns details for one event.
   "location": "Gwalior",
   "start_time": "2026-08-25T10:00:00Z",
   "end_time": "2026-08-25T16:00:00Z",
-  "required_volunteers": 20
+  "required_volunteers": 20,
+  "coordinator_id": 42
 }
 ```
+
+`coordinator_id` is optional. If provided, it must reference a user with role `COORDINATOR` — otherwise a coordinator can be assigned later via `PATCH /events/:id/coordinator`.
 
 ## Response
 
@@ -301,7 +304,8 @@ Returns details for one event.
 {
   "id": 1,
   "title": "Community Camp",
-  "status": "DRAFT"
+  "status": "DRAFT",
+  "coordinator_id": 42
 }
 ```
 

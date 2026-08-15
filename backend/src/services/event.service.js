@@ -11,7 +11,14 @@ function assertCanManage(event, user) {
   throw new ApiError(403, 'Forbidden');
 }
 
-async function createEvent({ title, description, location, startTime, endTime, requiredVolunteers }, adminId) {
+async function assertIsCoordinator(coordinatorId, userModel) {
+  const coordinator = await userModel.findById(coordinatorId);
+  if (!coordinator || coordinator.role !== 'COORDINATOR') {
+    throw new ApiError(400, 'coordinator_id must reference a user with role COORDINATOR');
+  }
+}
+
+async function createEvent({ title, description, location, startTime, endTime, requiredVolunteers, coordinatorId }, adminId, userModel) {
   if (!title || !location || !startTime || !endTime || !requiredVolunteers) {
     throw new ApiError(400, 'title, location, start_time, end_time and required_volunteers are required');
   }
@@ -21,8 +28,11 @@ async function createEvent({ title, description, location, startTime, endTime, r
   if (new Date(endTime) <= new Date(startTime)) {
     throw new ApiError(400, 'end_time must be after start_time');
   }
+  if (coordinatorId) {
+    await assertIsCoordinator(coordinatorId, userModel);
+  }
 
-  return eventModel.create({ title, description, location, startTime, endTime, requiredVolunteers, createdBy: adminId });
+  return eventModel.create({ title, description, location, startTime, endTime, requiredVolunteers, createdBy: adminId, coordinatorId });
 }
 
 async function listEvents({ status } = {}) {
@@ -49,10 +59,7 @@ async function assignCoordinator(id, coordinatorId, userModel) {
     throw new ApiError(400, 'Cannot assign a coordinator to a cancelled or completed event');
   }
 
-  const coordinator = await userModel.findById(coordinatorId);
-  if (!coordinator || coordinator.role !== 'COORDINATOR') {
-    throw new ApiError(400, 'coordinator_id must reference a user with role COORDINATOR');
-  }
+  await assertIsCoordinator(coordinatorId, userModel);
 
   return eventModel.assignCoordinator(id, coordinatorId);
 }
