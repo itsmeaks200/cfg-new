@@ -57,6 +57,7 @@ export default function EventDetail() {
         if (user?.role === 'ADMIN') {
           const { data } = await coordinatorApi.list();
           setCoordinators(data);
+          setSelectedCoordinator(currentEvent.coordinator_id ? String(currentEvent.coordinator_id) : '');
         }
 
         await loadManageData(currentEvent);
@@ -153,6 +154,11 @@ export default function EventDetail() {
       {isAdmin && (
         <div className="card">
           <h3>Assign coordinator</h3>
+          <p className="muted">
+            Currently assigned: {event.coordinator_id
+              ? coordinators.find((c) => c.id === event.coordinator_id)?.name || `#${event.coordinator_id}`
+              : 'None'}
+          </p>
           <div className="row">
             <select value={selectedCoordinator} onChange={(e) => setSelectedCoordinator(e.target.value)}>
               <option value="">Select coordinator...</option>
