@@ -1,74 +1,484 @@
 {
-  "info": { "name": "CFG Backend - Auth (Access/Refresh)", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "info": {
+    "name": "CFG Backend - Full API",
+    "description": "End-to-end flow: admin invites coordinator -> coordinator signs up -> admin creates event & assigns coordinator -> coordinator opens registration -> volunteer signs up & registers -> coordinator marks attendance -> analytics. Run folders top to bottom.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
   "variable": [
     { "key": "baseUrl", "value": "http://localhost:5000/api" },
-    { "key": "accessToken", "value": "" },
-    { "key": "refreshToken", "value": "" }
+
+    { "key": "adminEmail", "value": "admin@cfg.local" },
+    { "key": "adminPassword", "value": "admin12345" },
+    { "key": "adminAccessToken", "value": "" },
+
+    { "key": "volunteerEmail", "value": "volunteer.test@example.com" },
+    { "key": "volunteerPassword", "value": "password123" },
+    { "key": "volunteerAccessToken", "value": "" },
+    { "key": "volunteerRefreshToken", "value": "" },
+    { "key": "volunteerId", "value": "" },
+
+    { "key": "coordinatorEmail", "value": "coordinator.test@example.com" },
+    { "key": "coordinatorPassword", "value": "password123" },
+    { "key": "coordinatorAccessToken", "value": "" },
+    { "key": "coordinatorId", "value": "" },
+    { "key": "inviteCode", "value": "" },
+
+    { "key": "eventId", "value": "" },
+    { "key": "registrationId", "value": "" }
   ],
   "item": [
     {
-      "name": "Signup (Volunteer)",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test User\",\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}" },
-        "url": "{{baseUrl}}/auth/signup"
-      }
-    },
-    {
-      "name": "Login",
-      "event": [{
-        "listen": "test",
-        "script": {
-          "exec": [
-            "const body = pm.response.json();",
-            "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
-            "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"
-          ]
+      "name": "1. Admin",
+      "item": [
+        {
+          "name": "Login (Admin)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": { "exec": [
+                "const runId = Date.now();",
+                "pm.collectionVariables.set('volunteerEmail', `volunteer.test.${runId}@example.com`);",
+                "pm.collectionVariables.set('coordinatorEmail', `coordinator.test.${runId}@example.com`);"
+              ] }
+            },
+            {
+              "listen": "test",
+              "script": { "exec": [
+                "const body = pm.response.json();",
+                "pm.test('status 200', () => pm.response.to.have.status(200));",
+                "pm.test('role is ADMIN', () => pm.expect(body.user.role).to.eql('ADMIN'));",
+                "pm.collectionVariables.set('adminAccessToken', body.accessToken);"
+              ] }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+            "url": "{{baseUrl}}/auth/login"
+          }
         }
-      }],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"password123\"\n}" },
-        "url": "{{baseUrl}}/auth/login"
-      }
+      ]
     },
     {
-      "name": "Me",
-      "request": {
-        "method": "GET",
-        "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
-        "url": "{{baseUrl}}/auth/me"
-      }
-    },
-    {
-      "name": "Refresh",
-      "event": [{
-        "listen": "test",
-        "script": {
-          "exec": [
+      "name": "2. Coordinator Provisioning",
+      "item": [
+        {
+          "name": "Invite Coordinator (Admin)",
+          "event": [{ "listen": "test", "script": { "exec": [
             "const body = pm.response.json();",
-            "if (body.accessToken) pm.collectionVariables.set('accessToken', body.accessToken);",
-            "if (body.refreshToken) pm.collectionVariables.set('refreshToken', body.refreshToken);"
-          ]
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('inviteCode', body.inviteCode);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{coordinatorEmail}}\"\n}" },
+            "url": "{{baseUrl}}/coordinators/invite"
+          }
+        },
+        {
+          "name": "Coordinator Signup",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"inviteCode\": \"{{inviteCode}}\",\n  \"name\": \"Test Coordinator\",\n  \"email\": \"{{coordinatorEmail}}\",\n  \"password\": \"{{coordinatorPassword}}\"\n}" },
+            "url": "{{baseUrl}}/auth/coordinator-signup"
+          }
+        },
+        {
+          "name": "Reuse Invite Code (should 400 - already used)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 400', () => pm.response.to.have.status(400));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"inviteCode\": \"{{inviteCode}}\",\n  \"name\": \"Someone Else\",\n  \"email\": \"{{coordinatorEmail}}\",\n  \"password\": \"password123\"\n}" },
+            "url": "{{baseUrl}}/auth/coordinator-signup"
+          }
+        },
+        {
+          "name": "Login (Coordinator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('role is COORDINATOR', () => pm.expect(body.user.role).to.eql('COORDINATOR'));",
+            "pm.collectionVariables.set('coordinatorAccessToken', body.accessToken);",
+            "pm.collectionVariables.set('coordinatorId', body.user.id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{coordinatorEmail}}\",\n  \"password\": \"{{coordinatorPassword}}\"\n}" },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "List Coordinators (Admin)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('includes the new coordinator', () => {",
+            "  const body = pm.response.json();",
+            "  const ids = body.map(c => c.id);",
+            "  pm.expect(ids).to.include(Number(pm.collectionVariables.get('coordinatorId')));",
+            "});"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/coordinators"
+          }
         }
-      }],
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
-        "url": "{{baseUrl}}/auth/refresh"
-      }
+      ]
     },
     {
-      "name": "Logout",
-      "request": {
-        "method": "POST",
-        "header": [{ "key": "Content-Type", "value": "application/json" }],
-        "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}" },
-        "url": "{{baseUrl}}/auth/logout"
-      }
+      "name": "3. Volunteer Signup & Login",
+      "item": [
+        {
+          "name": "Signup (Volunteer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 201', () => pm.response.to.have.status(201));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test Volunteer\",\n  \"email\": \"{{volunteerEmail}}\",\n  \"password\": \"{{volunteerPassword}}\"\n}" },
+            "url": "{{baseUrl}}/auth/signup"
+          }
+        },
+        {
+          "name": "Signup Duplicate Email (should 409)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 409', () => pm.response.to.have.status(409));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Test Volunteer\",\n  \"email\": \"{{volunteerEmail}}\",\n  \"password\": \"{{volunteerPassword}}\"\n}" },
+            "url": "{{baseUrl}}/auth/signup"
+          }
+        },
+        {
+          "name": "Login (Volunteer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('role is VOLUNTEER', () => pm.expect(body.user.role).to.eql('VOLUNTEER'));",
+            "pm.collectionVariables.set('volunteerAccessToken', body.accessToken);",
+            "pm.collectionVariables.set('volunteerRefreshToken', body.refreshToken);",
+            "pm.collectionVariables.set('volunteerId', body.user.id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{volunteerEmail}}\",\n  \"password\": \"{{volunteerPassword}}\"\n}" },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Login Wrong Password (should 401)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 401', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"{{volunteerEmail}}\",\n  \"password\": \"wrong-password\"\n}" },
+            "url": "{{baseUrl}}/auth/login"
+          }
+        },
+        {
+          "name": "Me (Volunteer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/auth/me"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('rotated token differs', () => pm.expect(body.refreshToken).to.not.eql(pm.collectionVariables.get('volunteerRefreshToken')));",
+            "pm.collectionVariables.set('volunteerAccessToken', body.accessToken);",
+            "pm.collectionVariables.set('volunteerRefreshToken', body.refreshToken);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{volunteerRefreshToken}}\"\n}" },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Events (Admin)",
+      "item": [
+        {
+          "name": "Create Event (with coordinator assigned)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "pm.test('status is DRAFT', () => pm.expect(body.status).to.eql('DRAFT'));",
+            "pm.collectionVariables.set('eventId', body.id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Postman Test Event\",\n  \"description\": \"Created by the Postman collection\",\n  \"location\": \"Test Location\",\n  \"start_time\": \"2026-09-01T09:00:00Z\",\n  \"end_time\": \"2026-09-01T13:00:00Z\",\n  \"required_volunteers\": 2,\n  \"coordinator_id\": {{coordinatorId}}\n}" },
+            "url": "{{baseUrl}}/events"
+          }
+        },
+        {
+          "name": "Create Event as Volunteer (should 403)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 403', () => pm.response.to.have.status(403));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Should Fail\",\n  \"location\": \"X\",\n  \"start_time\": \"2026-09-01T09:00:00Z\",\n  \"end_time\": \"2026-09-01T13:00:00Z\",\n  \"required_volunteers\": 1\n}" },
+            "url": "{{baseUrl}}/events"
+          }
+        },
+        {
+          "name": "List Events",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/events" }
+        },
+        {
+          "name": "Get Event",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('coordinator is assigned', () => pm.expect(pm.response.json().coordinator_id).to.eql(Number(pm.collectionVariables.get('coordinatorId'))));"
+          ] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/events/{{eventId}}" }
+        },
+        {
+          "name": "Get Event - Not Found (should 404)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 404', () => pm.response.to.have.status(404));"
+          ] } }],
+          "request": { "method": "GET", "url": "{{baseUrl}}/events/999999" }
+        }
+      ]
+    },
+    {
+      "name": "5. Registration Lifecycle",
+      "item": [
+        {
+          "name": "Register Before Open (should 400)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 400', () => pm.response.to.have.status(400));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/register"
+          }
+        },
+        {
+          "name": "Open Registration (Coordinator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('status is OPEN', () => pm.expect(pm.response.json().status).to.eql('OPEN'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{coordinatorAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/open-registration"
+          }
+        },
+        {
+          "name": "Register (Volunteer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 201', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('registrationId', body.registration_id);"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/register"
+          }
+        },
+        {
+          "name": "Register Again - Duplicate (should 409)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 409', () => pm.response.to.have.status(409));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/register"
+          }
+        },
+        {
+          "name": "My Registrations",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('includes this event', () => {",
+            "  const ids = pm.response.json().map(r => r.event_id);",
+            "  pm.expect(ids).to.include(Number(pm.collectionVariables.get('eventId')));",
+            "});"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/me/registrations"
+          }
+        },
+        {
+          "name": "Event Registrations (Coordinator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{coordinatorAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/registrations"
+          }
+        },
+        {
+          "name": "Mark Attendance - PRESENT (Coordinator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{coordinatorAccessToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"PRESENT\"\n}" },
+            "url": "{{baseUrl}}/registrations/{{registrationId}}/attendance"
+          }
+        },
+        {
+          "name": "My Attendance",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/me/attendance"
+          }
+        },
+        {
+          "name": "Event Analytics",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('registered is 1', () => pm.expect(body.registered).to.eql(1));",
+            "pm.test('attendance is 1', () => pm.expect(body.attendance).to.eql(1));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{coordinatorAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/analytics"
+          }
+        },
+        {
+          "name": "Unregister (Volunteer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{volunteerAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/register"
+          }
+        },
+        {
+          "name": "Close Registration (Coordinator)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('status is CLOSED', () => pm.expect(pm.response.json().status).to.eql('CLOSED'));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{coordinatorAccessToken}}" }],
+            "url": "{{baseUrl}}/events/{{eventId}}/close-registration"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Analytics & Cleanup",
+      "item": [
+        {
+          "name": "Admin Analytics",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "const body = pm.response.json();",
+            "pm.test('status 200', () => pm.response.to.have.status(200));",
+            "pm.test('has expected keys', () => {",
+            "  pm.expect(body).to.have.all.keys('total_events','open_events','completed_events','total_volunteers','total_registrations','attendance_count');",
+            "});"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminAccessToken}}" }],
+            "url": "{{baseUrl}}/analytics"
+          }
+        },
+        {
+          "name": "Admin Analytics as Coordinator (should 403)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 403', () => pm.response.to.have.status(403));"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{coordinatorAccessToken}}" }],
+            "url": "{{baseUrl}}/analytics"
+          }
+        },
+        {
+          "name": "Logout (Volunteer)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 200', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{volunteerRefreshToken}}\"\n}" },
+            "url": "{{baseUrl}}/auth/logout"
+          }
+        },
+        {
+          "name": "Refresh After Logout (should 401)",
+          "event": [{ "listen": "test", "script": { "exec": [
+            "pm.test('status 401', () => pm.response.to.have.status(401));"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"{{volunteerRefreshToken}}\"\n}" },
+            "url": "{{baseUrl}}/auth/refresh"
+          }
+        }
+      ]
     }
   ]
 }
